@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+
+.cache/
+models/
+outputs/
+saves/
+wandb/
+
+*.npy
+*.safetensors
+*.pt
+*.pth

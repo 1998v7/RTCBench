@@ -1,0 +1,92 @@
+hydra:
+  searchpath:
+    - file://${oc.env:VERL_ROOT,../verl}/verl/trainer/config
+  run:
+    dir: ${oc.env:OUTPUT_DIR,../outputs}/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${oc.env:OUTPUT_DIR,../outputs}/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+data:
+  train_files: ${oc.env:DATASET_PATH,../data/rl_train.parquet}
+  val_files: ${oc.env:VAL_DATASET_PATH,../data/rl_val.parquet}
+  train_batch_size: 32
+  val_batch_size: 32
+  max_prompt_length: 4096
+  max_response_length: 12288
+  filter_overlong_prompts: True
+  filter_overlong_prompts_workers: 8
+  truncation: right
+  shuffle: True
+  prompt_key: prompt
+  reward_fn_key: data_source
+
+actor_rollout_ref:
+  model:
+    path: ${oc.env:MODEL_PATH,../models/sft_checkpoint}
+    trust_remote_code: True
+    use_remove_padding: True
+    enable_gradient_checkpointing: True
+  actor:
+    strategy: fsdp
+    optim:
+      lr: 1e-6
+      lr_scheduler_type: constant
+    ppo_mini_batch_size: 32
+    ppo_micro_batch_size_per_gpu: 2
+    use_kl_loss: True
+    kl_loss_coef: 0.001
+    kl_loss_type: low_var_kl
+    entropy_coeff: 0
+    fsdp_config:
+      param_offload: False
+      optimizer_offload: False
+  rollout:
+    name: vllm
+    tensor_model_parallel_size: 1
+    gpu_memory_utilization: 0.55
+    enforce_eager: True
+    max_model_len: 20480
+    n: 5
+    load_format: safetensors
+    log_prob_micro_batch_size_per_gpu: 2
+    multi_turn:
+      max_assistant_turns: 2
+      interaction_config_path: ${oc.env:INTERACTION_CONFIG,interaction_config.yaml}
+    agent:
+      default_agent_loop: tool_agent
+  ref:
+    log_prob_micro_batch_size_per_gpu: 2
+    fsdp_config:
+      param_offload: True
+
+reward:
+  custom_reward_function:
+    path: ${oc.env:REWARD_FN_PATH,reward.py}
+    name: compute_score
+  reward_model:
+    enable: False
+
+algorithm:
+  adv_estimator: grpo
+  use_kl_in_reward: False
+  norm_adv_by_std_in_grpo: True
+
+trainer:
+  project_name: bfcl_retrieval3_grpo
+  experiment_name: outcome_only
+  logger: [console, wandb]
+  n_gpus_per_node: 1
+  nnodes: 1
+  total_epochs: 5
+  save_freq: 15
+  test_freq: 15
+  val_before_train: True
+  critic_warmup: 0
+  resume_mode: auto
+  default_local_dir: ${oc.env:OUTPUT_DIR,../outputs/retrieval_grpo}
+  # -1 = save all val trajectories to val_trajectories_step*.json; >0 = balanced subsample
+  val_trajectories_max_samples: -1

@@ -1,0 +1,6 @@
+interaction:
+  - class_name: "interaction.SearchToolInteraction"
+    name: "search_tool"
+    config:
+      non_live_tool_bank_path: null   # overridden by env var NON_LIVE_TOOL_BANK_PATH
+      live_tool_bank_path: null       # overridden by env var LIVE_TOOL_BANK_PATH
